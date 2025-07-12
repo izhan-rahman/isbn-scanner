@@ -7,7 +7,7 @@ export default function App() {
   const [titleFromBackend, setTitleFromBackend] = useState("");
   const [manualTitle, setManualTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("1"); // default to 1
+  const [quantity, setQuantity] = useState("1");  
   const [showManualTitle, setShowManualTitle] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [isSaved, setIsSaved] = useState(false);
@@ -22,6 +22,7 @@ export default function App() {
 
       const data = await response.json();
       setIsbn(isbnToUse);
+      setQuantity("1");  // Reset to 1 when a book is scanned
 
       if (data.title) {
         setTitleFromBackend(data.title);
@@ -43,13 +44,13 @@ export default function App() {
 
   const sendToBackend = async () => {
     const title = titleFromBackend || manualTitle;
-    if (!isbn || !title || !price) return;
+    if (!isbn || !title || !price || !quantity) return;
 
     try {
       const response = await fetch("https://testocr.pythonanywhere.com/save_title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isbn, b_title: title, price, quantity }), // quantity = "1"
+        body: JSON.stringify({ isbn, b_title: title, price, quantity }),
       });
 
       const data = await response.json();
@@ -67,7 +68,7 @@ export default function App() {
     setTitleFromBackend("");
     setManualTitle("");
     setPrice("");
-    setQuantity("1"); // reset to default
+    setQuantity("1");  // Reset to 1
     setShowManualTitle(false);
     setIsSaved(false);
     setSaveMessage("");
@@ -129,7 +130,14 @@ export default function App() {
               style={styles.input}
             />
 
-            {/* Quantity removed from UI */}
+            <p>Enter Quantity:</p>
+            <input
+              type="number"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder="Enter quantity"
+              style={styles.input}
+            />
 
             {!isSaved && (
               <button style={styles.saveButton} onClick={sendToBackend}>
