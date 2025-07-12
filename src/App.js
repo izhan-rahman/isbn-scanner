@@ -15,7 +15,7 @@ export default function App() {
 
   const fetchTitle = async (isbnToUse) => {
     try {
-      const response = await fetch("https://testocr.pythonanywhere.com/receive_isbn", {
+      const response = await fetch("https://testocrtest.pythonanywhere.com/receive_isbn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isbn: isbnToUse }),
@@ -47,7 +47,7 @@ export default function App() {
     if (!isbn || !title || !price || !quantity) return;
 
     try {
-      const response = await fetch("https://testocr.pythonanywhere.com/save_title", {
+      const response = await fetch("https://testocrtest.pythonanywhere.com/save_title", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isbn, b_title: title, price, quantity }),
