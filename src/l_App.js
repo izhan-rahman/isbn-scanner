@@ -1,11 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Tesseract from "tesseract.js";
 
 export default function App() {
   const [view, setView] = useState("scan");
   const [photo, setPhoto] = useState(null);
   const [isbn, setIsbn] = useState("");
+  const [manualIsbn, setManualIsbn] = useState("");
+  const [bookTitle, setBookTitle] = useState("");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualPrice, setManualPrice] = useState(""); // New state
   const [loadingText, setLoadingText] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [isbnNotFound, setIsbnNotFound] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
 
   const handleScanClick = () => {
     const input = document.createElement("input");
@@ -29,44 +37,105 @@ export default function App() {
 
         const match = text.match(/97[89][-– ]?\d{1,5}[-– ]?\d{1,7}[-– ]?\d{1,7}[-– ]?\d/);
         if (match) {
-          setIsbn(match[0].replace(/[-–\s]/g, ""));
-        } else {
-          setIsbn("ISBN not found");
-        }
+          const detectedIsbn = match[0].replace(/[-–\s]/g, "");
+          setIsbn(detectedIsbn);
+          setIsbnNotFound(false);
 
-        setView("confirmation");
+          try {
+            const response = await fetch("http://192.168.1.24:5000/receive_isbn", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ isbn: detectedIsbn }),
+            });
+
+            const data = await response.json();
+            if (data.title) {
+              setBookTitle(data.title);
+              setShowManualInput(true); // allow price input
+              setIsSaved(false);
+              setView("confirmation");
+            } else {
+              setBookTitle("");
+              setShowManualInput(true);
+              setIsbnNotFound(true);
+              setView("confirmation");
+            }
+          } catch (error) {
+            console.error("Fetch error:", error);
+            setBookTitle("");
+            setShowManualInput(true);
+            setIsbnNotFound(true);
+            setView("confirmation");
+          }
+        } else {
+          setIsbn("");
+          setIsbnNotFound(true);
+          setShowManualInput(true);
+          setView("confirmation");
+        }
       }
     };
     input.click();
   };
 
-  useEffect(() => {
-    if (view === "confirmation") {
-      const timer = setTimeout(() => {
-        setView("scan");
-        setPhoto(null);
-        setIsbn("");
-      }, 7000);
-      return () => clearTimeout(timer);
+  const sendToBackend = async (isbnToSend, titleToSend, priceToSend) => {
+    try {
+      const response = await fetch("http://192.168.1.24:5000/save_title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isbn: isbnToSend, b_title: titleToSend, price: priceToSend }),
+      });
+      const data = await response.json();
+      console.log("✅ Saved:", data);
+    } catch (error) {
+      console.error("❌ Backend error:", error);
     }
-  }, [view]);
+  };
+
+  const handleSendManual = async () => {
+    const usedIsbn = isbn || manualIsbn.trim();
+    const usedTitle = manualTitle.trim() || bookTitle;
+    const usedPrice = manualPrice.trim();
+
+    if (usedIsbn && usedTitle && usedPrice) {
+      await sendToBackend(usedIsbn, usedTitle, usedPrice);
+      setSaveMessage("✅ Saved successfully");
+      setIsSaved(true);
+    } else {
+      setSaveMessage("❗ Please fill in all fields (ISBN, title, price)");
+    }
+  };
+
+  const handleBack = () => {
+    setView("scan");
+    setPhoto(null);
+    setIsbn("");
+    setManualIsbn("");
+    setBookTitle("");
+    setManualTitle("");
+    setManualPrice("");
+    setShowManualInput(false);
+    setIsbnNotFound(false);
+    setSaveMessage("");
+    setIsSaved(false);
+  };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", backgroundColor: "#f5f5f5" }}>
-      <div style={{ width: "100%", maxWidth: "400px", background: "#fff", padding: "20px", borderRadius: "16px", boxShadow: "0 0 20px rgba(0,0,0,0.1)", textAlign: "center" }}>
+    <div style={styles.container}>
+      <div style={styles.card}>
         {view === "scan" && (
           <>
-            <h2 style={{ fontSize: "24px", fontWeight: "bold", marginBottom: "10px" }}>📚 Alphabit Scanner</h2>
-            <p style={{ color: "#888" }}>Click photo to scan real ISBN</p>
-            <button onClick={handleScanClick} style={{ marginTop: "20px", background: "#007bff", color: "#fff", border: "none", borderRadius: "8px", padding: "12px 24px", fontSize: "16px" }}>
-              📷 Click Photo
+            <h1 style={styles.header}>📚 ISBN Scanner</h1>
+            <p style={styles.subText}>Scan a book's ISBN from a photo</p>
+            <button style={styles.primaryButton} onClick={handleScanClick}>
+              📷 Take Photo
             </button>
           </>
         )}
 
         {view === "saving" && (
           <>
-            <div style={{ fontSize: "30px", marginBottom: "10px" }}>🔄</div>
+            <div style={styles.spinner}></div>
             <h3>Processing...</h3>
             <p>{loadingText}</p>
           </>
@@ -74,14 +143,157 @@ export default function App() {
 
         {view === "confirmation" && (
           <>
-            {photo && <img src={photo} alt="Scanned Book" style={{ width: "150px", height: "auto", margin: "10px auto", borderRadius: "12px" }} />}
-            <h3>✅ Scan Complete</h3>
-            <p>Detected ISBN:</p>
-            <p><strong>{isbn}</strong></p>
-            <p>Returning to scanner in 7 seconds...</p>
+            {photo && <img src={photo} alt="Scanned Book" style={styles.image} />}
+
+            {isbnNotFound ? (
+              <>
+                <h3 style={{ color: "red" }}>❗ ISBN not found</h3>
+              </>
+            ) : (
+              <>
+                <h3 style={{ color: "#28a745" }}>✅ ISBN Detected</h3>
+                <p><strong>ISBN:</strong> {isbn}</p>
+                {bookTitle && <p><strong>Book Title:</strong> {bookTitle}</p>}
+              </>
+            )}
+
+            {showManualInput && (
+              <>
+                {!isbn && (
+                  <>
+                    <p>Enter ISBN:</p>
+                    <input
+                      value={manualIsbn}
+                      onChange={(e) => setManualIsbn(e.target.value)}
+                      placeholder="Enter ISBN"
+                      style={styles.input}
+                    />
+                  </>
+                )}
+
+                {!bookTitle && (
+                  <>
+                    <p>Enter Book Title:</p>
+                    <input
+                      value={manualTitle}
+                      onChange={(e) => setManualTitle(e.target.value)}
+                      placeholder="Enter book title"
+                      style={styles.input}
+                    />
+                  </>
+                )}
+
+                <p>Enter Price (₹):</p>
+                <input
+                  type="number"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder="Enter price"
+                  style={styles.input}
+                />
+
+                {!isSaved && (
+                  <button style={styles.saveButton} onClick={handleSendManual}>
+                    💾 Save
+                  </button>
+                )}
+              </>
+            )}
+
+            {saveMessage && <p style={{ marginTop: 12, color: "green" }}>{saveMessage}</p>}
+
+            <button style={styles.secondaryButton} onClick={handleBack}>
+              🔙 Return to Scanner
+            </button>
           </>
         )}
       </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    minHeight: "100vh",
+    background: "linear-gradient(to right, #e0f7fa, #fefefe)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "'Segoe UI', sans-serif",
+    padding: "20px",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "420px",
+    background: "#fff",
+    padding: "30px",
+    borderRadius: "20px",
+    boxShadow: "0 15px 35px rgba(0,0,0,0.1)",
+    textAlign: "center",
+  },
+  header: {
+    fontSize: "26px",
+    color: "#007bff",
+  },
+  subText: {
+    color: "#666",
+    marginBottom: "20px",
+  },
+  image: {
+    width: "180px",
+    borderRadius: "16px",
+    marginBottom: "20px",
+  },
+  input: {
+    padding: "10px",
+    width: "90%",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    marginBottom: "12px",
+  },
+  primaryButton: {
+    marginTop: "20px",
+    background: "#007bff",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    padding: "14px 28px",
+    fontSize: "16px",
+    cursor: "pointer",
+  },
+  saveButton: {
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "12px 24px",
+    fontSize: "16px",
+    cursor: "pointer",
+  },
+  secondaryButton: {
+    background: "#6c757d",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "10px 20px",
+    fontSize: "14px",
+    cursor: "pointer",
+    marginTop: "20px",
+  },
+  spinner: {
+    margin: "20px auto",
+    border: "4px solid #f3f3f3",
+    borderTop: "4px solid #007bff",
+    borderRadius: "50%",
+    width: "40px",
+    height: "40px",
+    animation: "spin 1s linear infinite",
+  },
+};
