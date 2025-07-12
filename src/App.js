@@ -4,10 +4,11 @@ import BarcodeScanner from "./components/BarcodeScanner";
 export default function App() {
   const [view, setView] = useState("scan");
   const [isbn, setIsbn] = useState("");
+  const [manualIsbn, setManualIsbn] = useState("");
   const [titleFromBackend, setTitleFromBackend] = useState("");
   const [manualTitle, setManualTitle] = useState("");
   const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("1");  
+  const [quantity, setQuantity] = useState("1");
   const [showManualTitle, setShowManualTitle] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [isSaved, setIsSaved] = useState(false);
@@ -22,7 +23,6 @@ export default function App() {
 
       const data = await response.json();
       setIsbn(isbnToUse);
-      setQuantity("1");  // Reset to 1 when a book is scanned
 
       if (data.title) {
         setTitleFromBackend(data.title);
@@ -62,13 +62,21 @@ export default function App() {
     }
   };
 
+  const handleManualIsbnFetch = () => {
+    const trimmed = manualIsbn.trim();
+    if (trimmed) {
+      fetchTitle(trimmed);
+    }
+  };
+
   const handleBack = () => {
     setView("scan");
     setIsbn("");
+    setManualIsbn("");
     setTitleFromBackend("");
     setManualTitle("");
     setPrice("");
-    setQuantity("1");  // Reset to 1
+    setQuantity("1");
     setShowManualTitle(false);
     setIsSaved(false);
     setSaveMessage("");
@@ -81,11 +89,29 @@ export default function App() {
           <>
             <h1 style={styles.header}>📚 ISBN Scanner</h1>
             <p style={styles.subText}>Point your camera at the barcode</p>
-            <button
-              style={styles.primaryButton}
-              onClick={() => setView("liveScanner")}
-            >
+            <button style={styles.primaryButton} onClick={() => setView("liveScanner")}>
               🎦 Start Live Scanner
+            </button>
+            <button style={styles.manualButton} onClick={() => setView("manualIsbn")}>
+              📄 Enter ISBN Manually
+            </button>
+          </>
+        )}
+
+        {view === "manualIsbn" && (
+          <>
+            <h3>Enter ISBN manually</h3>
+            <input
+              value={manualIsbn}
+              onChange={(e) => setManualIsbn(e.target.value)}
+              placeholder="Enter ISBN"
+              style={styles.input}
+            />
+            <button style={styles.primaryButton} onClick={handleManualIsbnFetch}>
+              🔍 Fetch Title
+            </button>
+            <button style={styles.secondaryButton} onClick={handleBack}>
+              🔙 Back
             </button>
           </>
         )}
@@ -198,6 +224,16 @@ const styles = {
     borderRadius: "12px",
     padding: "14px 28px",
     fontSize: "16px",
+    cursor: "pointer",
+    marginTop: "10px",
+  },
+  manualButton: {
+    background: "#17a2b8",
+    color: "#fff",
+    border: "none",
+    borderRadius: "10px",
+    padding: "12px 22px",
+    fontSize: "15px",
     cursor: "pointer",
     marginTop: "10px",
   },
